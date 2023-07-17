@@ -1,20 +1,45 @@
+mod steam;
+
 use anyhow::anyhow;
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 use shuttle_secrets::SecretStore;
+use steam::SteamApiClient;
 use tracing::{error, info};
 
-struct Bot;
+#[derive(Debug)]
+struct Bot {
+    client: SteamApiClient,
+}
 
 #[async_trait]
 impl EventHandler for Bot {
     async fn message(&self, ctx: Context, msg: Message) {
-        if msg.content == "!hello" {
-            if let Err(e) = msg.channel_id.say(&ctx.http, "world!").await {
-                error!("Error sending message: {:?}", e);
+        let splited = msg.content.split(' ').collect::<Vec<_>>();
+        if splited.is_empty() {
+            return;
+        }
+
+        match splited[0] {
+            "!profile" if splited.len() == 2 => {
+                let steam_id = splited[1];
+                match self.client.get_owned_games(steam_id).await {
+                    Ok(games) => {
+                        if let Err(e) = msg
+                            .reply_mention(ctx, format!("you have {} games", games.len()))
+                            .await
+                        {
+                            error!("{e:?}");
+                        }
+                    }
+                    Err(e) => {
+                        error!("{e:?}");
+                    }
+                }
             }
+            _ => {}
         }
     }
 
@@ -34,11 +59,17 @@ async fn serenity(
         return Err(anyhow!("'DISCORD_TOKEN' was not found").into());
     };
 
+    let Some(api_key) = secret_store.get("STEAM_API_KEY") else {
+        return Err(anyhow!("'STEAM_API_KEY' was not found").into());
+    };
+
     // Set gateway intents, which decides what events the bot will be notified about
     let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
 
     let client = Client::builder(&token, intents)
-        .event_handler(Bot)
+        .event_handler(Bot {
+            client: SteamApiClient::new(api_key),
+        })
         .await
         .expect("Err creating client");
 
