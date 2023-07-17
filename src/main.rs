@@ -46,14 +46,14 @@ impl EventHandler for Bot {
             "!register" if splited.len() == 2 => {
                 let steam_id = splited[1];
                 let discord_id = msg.author.id.to_string();
-                if let Ok(_) = self.db.insert_user(&discord_id, steam_id).await {
+                if self.db.insert_user(&discord_id, steam_id).await.is_ok() {
                     let _ = msg.reply_mention(ctx, "登録しました").await;
                 }
             }
             "!update" if splited.len() == 2 => {
                 let steam_id = splited[1];
                 let discord_id = msg.author.id.to_string();
-                if let Ok(_) = self.db.update_user(&discord_id, steam_id).await {
+                if self.db.update_user(&discord_id, steam_id).await.is_ok() {
                     let _ = msg.reply_mention(ctx, "更新しました").await;
                 }
             }
@@ -93,7 +93,8 @@ impl EventHandler for Bot {
                         }
                     }
                     Ok(_) => {
-                        if let Err(e) = msg.reply_mention(ctx, format!("Is is not game.")).await {
+                        if let Err(e) = msg.reply_mention(ctx, "Is is not game.".to_string()).await
+                        {
                             error!("{e:?}")
                         }
                     }

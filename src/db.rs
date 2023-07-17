@@ -35,7 +35,13 @@ impl DbClient {
     }
 
     pub async fn update_user(&self, discord_id: &str, steam_id: &str) -> Result<UserRow> {
-        let user: UserRow = sqlx::query_as("UPDATE users SET steam_id = $1 WHERE discord_id = $2 RETURNING discord_id, steam_id").bind(steam_id).bind(discord_id).fetch_one(&self.pool).await?;
+        let user: UserRow = sqlx::query_as(
+            "UPDATE users SET steam_id = $1 WHERE discord_id = $2 RETURNING discord_id, steam_id",
+        )
+        .bind(steam_id)
+        .bind(discord_id)
+        .fetch_one(&self.pool)
+        .await?;
         Ok(user)
     }
 }
