@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Ok, Result};
 use monostate::MustBe;
 use serde::Deserialize;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, PartialEq, Eq, Hash, Debug)]
 pub struct Game {
     pub appid: u64,
     pub playtime_forever: u64,
@@ -102,17 +102,20 @@ impl StoreCategory {
 #[serde(tag = "type")]
 pub enum StoreAppDetail {
     #[serde(rename = "game")]
-    Game {
-        name: String,
-        steam_appid: usize,
-        is_free: bool,
-        price_overview: Option<StorePriceOverview>,
-        categories: Vec<StoreCategory>,
-    },
+    Game(StoreGameDetail),
     #[serde(rename = "dlc")]
     Dlc,
     #[serde(rename = "music")]
     Music,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StoreGameDetail {
+    pub name: String,
+    pub steam_appid: usize,
+    pub is_free: bool,
+    pub price_overview: Option<StorePriceOverview>,
+    pub categories: Vec<StoreCategory>,
 }
 
 pub async fn get_app_detail(appid: &str) -> Result<StoreAppDetail> {

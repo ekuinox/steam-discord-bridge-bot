@@ -1,7 +1,9 @@
 mod db;
 mod steam;
 
-use anyhow::anyhow;
+use std::collections::{HashMap, HashSet};
+
+use anyhow::{anyhow, Result};
 use db::DbClient;
 use serenity::async_trait;
 use serenity::model::channel::Message;
@@ -9,7 +11,7 @@ use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 use shuttle_secrets::SecretStore;
 use sqlx::PgPool;
-use steam::{get_app_detail, SteamApiClient, StoreAppDetail};
+use steam::{get_app_detail, Game, SteamApiClient, StoreAppDetail, StoreGameDetail};
 use tracing::{error, info};
 
 #[derive(Debug)]
@@ -27,6 +29,62 @@ impl EventHandler for Bot {
         }
 
         match splited[0] {
+            "!match-by-steam-ids" if splited.len() > 2 => {
+                let ids = splited.iter().skip(1);
+                async fn get<'a>(
+                    steam: &'a SteamApiClient,
+                    id: &'a str,
+                ) -> Result<(&'a str, Vec<Game>)> {
+                    let resp = steam.get_owned_games(id).await?;
+                    Ok((id, resp))
+                }
+
+                async fn get_detail(id: u64) -> Result<StoreAppDetail> {
+                    let detail = get_app_detail(&id.to_string()).await?;
+                    Ok(detail)
+                }
+
+                let results = futures::future::join_all(ids.map(|id| get(&self.steam, id)))
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .collect::<HashMap<_, _>>();
+
+                let games = results
+                    .iter()
+                    .flat_map(|(_, games)| games)
+                    .collect::<HashSet<_>>();
+                let games = games
+                    .iter()
+                    .filter(|game| results.values().all(|games| games.contains(&game)))
+                    .collect::<Vec<_>>();
+                dbg!(&games, results.len());
+
+                let games =
+                    futures::future::join_all(games.iter().map(|game| get_detail(game.appid)))
+                        .await
+                        .into_iter()
+                        .flatten()
+                        .flat_map(|app| {
+                            if let StoreAppDetail::Game(game) = app {
+                                Some(game)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
+
+                let names = games
+                    .iter()
+                    .map(|game| game.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                dbg!(&games);
+                dbg!(&names);
+                if let Err(e) = msg.reply_mention(ctx, format!("User = {}, Found = {names}", results.len())).await {
+                    error!("{e:?}");
+                }
+            }
             "!profile" if splited.len() == 2 => {
                 let steam_id = splited[1];
                 match self.steam.get_owned_games(steam_id).await {
@@ -70,13 +128,13 @@ impl EventHandler for Bot {
             "!game" if splited.len() == 2 => {
                 let appid = splited[1];
                 match get_app_detail(appid).await {
-                    Ok(StoreAppDetail::Game {
+                    Ok(StoreAppDetail::Game(StoreGameDetail {
                         name,
                         is_free,
                         price_overview,
                         categories,
                         ..
-                    }) => {
+                    })) => {
                         let has_multi_player = categories.iter().any(|c| c.is_multi_player());
                         let price = price_overview
                             .as_ref()
