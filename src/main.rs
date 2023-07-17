@@ -6,7 +6,7 @@ use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 use shuttle_secrets::SecretStore;
-use steam::SteamApiClient;
+use steam::{get_app_detail, SteamApiClient, StoreAppDetail};
 use tracing::{error, info};
 
 #[derive(Debug)]
@@ -36,6 +36,41 @@ impl EventHandler for Bot {
                     }
                     Err(e) => {
                         error!("{e:?}");
+                    }
+                }
+            }
+            "!game" if splited.len() == 2 => {
+                let appid = splited[1];
+                match get_app_detail(appid).await {
+                    Ok(StoreAppDetail::Game {
+                        name,
+                        is_free,
+                        price_overview,
+                        categories,
+                        ..
+                    }) => {
+                        let has_multi_player = categories.iter().any(|c| c.is_multi_player());
+                        let price = price_overview
+                            .as_ref()
+                            .map(|price| price.final_formatted.as_str())
+                            .unwrap_or_else(|| if is_free { "Free" } else { "Unknown" });
+                        if let Err(e) = msg
+                            .reply_mention(
+                                ctx,
+                                format!("App name = {name}. multi = {has_multi_player}. price = {price}"),
+                            )
+                            .await
+                        {
+                            error!("{e:?}")
+                        }
+                    }
+                    Ok(_) => {
+                        if let Err(e) = msg.reply_mention(ctx, format!("Is is not game.")).await {
+                            error!("{e:?}")
+                        }
+                    }
+                    Err(e) => {
+                        error!("{e:?}")
                     }
                 }
             }

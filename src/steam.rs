@@ -1,4 +1,7 @@
-use anyhow::{Context, Ok, Result};
+use std::collections::HashMap;
+
+use anyhow::{anyhow, Context, Ok, Result};
+use monostate::MustBe;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
@@ -68,5 +71,68 @@ impl SteamApiClient {
             .await
             .context("invalid json")?;
         Ok(games)
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StorePriceOverview {
+    pub currency: String,
+    pub initial: usize,
+    pub r#final: usize,
+    pub discount_percent: usize,
+    pub initial_formatted: String,
+    pub final_formatted: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StoreCategory {
+    pub id: usize,
+    pub description: String,
+}
+
+impl StoreCategory {
+    const MULTI_PLAYER_ID: usize = 1;
+
+    pub fn is_multi_player(&self) -> bool {
+        self.id == Self::MULTI_PLAYER_ID
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "type")]
+pub enum StoreAppDetail {
+    #[serde(rename = "game")]
+    Game {
+        name: String,
+        steam_appid: usize,
+        is_free: bool,
+        price_overview: Option<StorePriceOverview>,
+        categories: Vec<StoreCategory>,
+    },
+    #[serde(rename = "dlc")]
+    Dlc,
+    #[serde(rename = "music")]
+    Music,
+}
+
+pub async fn get_app_detail(appid: &str) -> Result<StoreAppDetail> {
+    #[derive(Deserialize, Debug)]
+    struct StoreAppDetailResponse {
+        #[allow(unused)]
+        success: MustBe!(true),
+        data: StoreAppDetail,
+    }
+    let mut responses: HashMap<String, StoreAppDetailResponse> = reqwest::Client::default()
+        .get("http://store.steampowered.com/api/appdetails")
+        .query(&[("appids", appid)])
+        .send()
+        .await
+        .context("request errorr")?
+        .json()
+        .await
+        .context("invalid json")?;
+    match responses.remove(appid) {
+        Some(StoreAppDetailResponse { data, .. }) => Ok(data),
+        None => Err(anyhow!("Not found {appid}")),
     }
 }
