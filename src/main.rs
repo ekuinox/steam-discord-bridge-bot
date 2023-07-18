@@ -24,28 +24,41 @@ impl EventHandler for Bot {
         dbg!(&_new);
     }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Interaction::ApplicationCommand(command) = interaction {
-            println!("Received command interaction: {:#?}", command);
-
-            let resp = match command.data.name.as_str() {
-                commands::register::COMMAND => {
-                    commands::register::run(ctx.clone(), &command, &self.db).await
-                }
-                commands::show::COMMAND => {
-                    commands::show::run(ctx.clone(), &command, &self.db).await
-                }
-                commands::get_common_games::COMMAND => {
-                    commands::get_common_games::run(ctx.clone(), &command, &self.db, &self.steam)
+        match interaction {
+            Interaction::ApplicationCommand(command) => {
+                let resp = match command.data.name.as_str() {
+                    commands::register::COMMAND => {
+                        commands::register::run(ctx.clone(), &command, &self.db).await
+                    }
+                    commands::show::COMMAND => {
+                        commands::show::run(ctx.clone(), &command, &self.db).await
+                    }
+                    commands::get_common_games::COMMAND => {
+                        commands::get_common_games::run(
+                            ctx.clone(),
+                            &command,
+                            &self.db,
+                            &self.steam,
+                        )
                         .await
+                    }
+                    c => {
+                        tracing::warn!("Not implimented {c}");
+                        return;
+                    }
+                };
+                if let Err(e) = resp {
+                    tracing::warn!("{e:?}");
                 }
-                c => {
-                    tracing::warn!("Not implimented {c}");
-                    return;
-                }
-            };
-            if let Err(e) = resp {
-                tracing::warn!("{e:?}");
             }
+            Interaction::MessageComponent(mut component) => {
+                dbg!(component.message.id, component.data.custom_id);
+                let _r = component
+                    .message
+                    .edit(ctx, |msg| msg.content("aaaaaa"))
+                    .await;
+            }
+            _ => {}
         }
     }
 
@@ -84,7 +97,9 @@ async fn serenity(
     };
 
     // Set gateway intents, which decides what events the bot will be notified about
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT  ;
+    let intents = GatewayIntents::non_privileged()
+        | GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT;
 
     let client = Client::builder(&token, intents)
         .event_handler(Bot {
