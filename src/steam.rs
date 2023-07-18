@@ -1,18 +1,13 @@
-use std::collections::HashMap;
-
-use anyhow::{anyhow, Context, Ok, Result};
-use monostate::MustBe;
+use anyhow::{Context, Result};
 use serde::Deserialize;
 
+/// [GetOwnedGames](https://developer.valvesoftware.com/wiki/Steam_Web_API#GetOwnedGames_.28v0001.29) response.
+/// Requires `include_appinfo=true`.
 #[derive(Deserialize, PartialEq, Eq, Hash, Debug)]
 pub struct Game {
     pub appid: u64,
+    pub name: String,
     pub playtime_forever: u64,
-    pub playtime_windows_forever: u64,
-    pub playtime_mac_forever: u64,
-    pub playtime_linux_forever: u64,
-    pub rtime_last_played: u64,
-    pub playtime_disconnected: u64,
 }
 
 /// Steam Web API client.
@@ -71,71 +66,5 @@ impl SteamApiClient {
             .await
             .context("invalid json")?;
         Ok(games)
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct StorePriceOverview {
-    pub currency: String,
-    pub initial: usize,
-    pub r#final: usize,
-    pub discount_percent: usize,
-    pub initial_formatted: String,
-    pub final_formatted: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct StoreCategory {
-    pub id: usize,
-    pub description: String,
-}
-
-impl StoreCategory {
-    const MULTI_PLAYER_ID: usize = 1;
-
-    pub fn is_multi_player(&self) -> bool {
-        self.id == Self::MULTI_PLAYER_ID
-    }
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(tag = "type")]
-pub enum StoreAppDetail {
-    #[serde(rename = "game")]
-    Game(StoreGameDetail),
-    #[serde(rename = "dlc")]
-    Dlc,
-    #[serde(rename = "music")]
-    Music,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct StoreGameDetail {
-    pub name: String,
-    pub steam_appid: usize,
-    pub is_free: bool,
-    pub price_overview: Option<StorePriceOverview>,
-    pub categories: Vec<StoreCategory>,
-}
-
-pub async fn get_app_detail(appid: &str) -> Result<StoreAppDetail> {
-    #[derive(Deserialize, Debug)]
-    struct StoreAppDetailResponse {
-        #[allow(unused)]
-        success: MustBe!(true),
-        data: StoreAppDetail,
-    }
-    let mut responses: HashMap<String, StoreAppDetailResponse> = reqwest::Client::default()
-        .get("http://store.steampowered.com/api/appdetails")
-        .query(&[("appids", appid)])
-        .send()
-        .await
-        .context("request errorr")?
-        .json()
-        .await
-        .context("invalid json")?;
-    match responses.remove(appid) {
-        Some(StoreAppDetailResponse { data, .. }) => Ok(data),
-        None => Err(anyhow!("Not found {appid}")),
     }
 }
