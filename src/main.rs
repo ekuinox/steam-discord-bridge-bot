@@ -1,14 +1,12 @@
+mod commands;
 mod db;
 mod steam;
 
-use std::time::Instant;
-
 use anyhow::anyhow;
 use db::DbClient;
-use serenity::async_trait;
-use serenity::model::channel::Message;
-use serenity::model::gateway::Ready;
+use serenity::model::prelude::*;
 use serenity::prelude::*;
+use serenity::{async_trait, model::prelude::command::Command};
 use shuttle_secrets::SecretStore;
 use sqlx::PgPool;
 use steam::SteamApiClient;
@@ -22,66 +20,49 @@ struct Bot {
 
 #[async_trait]
 impl EventHandler for Bot {
-    async fn message(&self, ctx: Context, msg: Message) {
-        let splited = msg.content.split(' ').collect::<Vec<_>>();
-        if splited.is_empty() {
-            return;
-        }
+    async fn voice_state_update(&self, _ctx: Context, _old: Option<VoiceState>, _new: VoiceState) {
+        dbg!(&_new);
+    }
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::ApplicationCommand(command) = interaction {
+            println!("Received command interaction: {:#?}", command);
 
-        match splited[0] {
-            "!match-by-steam-ids" if splited.len() > 2 => {
-                let ids = splited.into_iter().skip(1).collect::<Vec<_>>();
-                let t = Instant::now();
-                if let Ok(common_games) = self.steam.get_common_games(&ids, ids.len()).await {
-                    dbg!(t.elapsed(), common_games.len());
+            let resp = match command.data.name.as_str() {
+                commands::register::COMMAND => {
+                    commands::register::run(ctx.clone(), &command, &self.db).await
                 }
+                commands::show::COMMAND => {
+                    commands::show::run(ctx.clone(), &command, &self.db).await
+                }
+                commands::get_common_games::COMMAND => {
+                    commands::get_common_games::run(ctx.clone(), &command, &self.db, &self.steam)
+                        .await
+                }
+                c => {
+                    tracing::warn!("Not implimented {c}");
+                    return;
+                }
+            };
+            if let Err(e) = resp {
+                tracing::warn!("{e:?}");
             }
-            "!profile" if splited.len() == 2 => {
-                let steam_id = splited[1];
-                match self.steam.get_owned_games(steam_id).await {
-                    Ok(games) => {
-                        if let Err(e) = msg
-                            .reply_mention(ctx, format!("you have {} games", games.len()))
-                            .await
-                        {
-                            error!("{e:?}");
-                        }
-                    }
-                    Err(e) => {
-                        error!("{e:?}");
-                    }
-                }
-            }
-            "!register" if splited.len() == 2 => {
-                let steam_id = splited[1];
-                let discord_id = msg.author.id.to_string();
-                if self.db.insert_user(&discord_id, steam_id).await.is_ok() {
-                    let _ = msg.reply_mention(ctx, "登録しました").await;
-                }
-            }
-            "!update" if splited.len() == 2 => {
-                let steam_id = splited[1];
-                let discord_id = msg.author.id.to_string();
-                if self.db.update_user(&discord_id, steam_id).await.is_ok() {
-                    let _ = msg.reply_mention(ctx, "更新しました").await;
-                }
-            }
-            "!show" => match self.db.get_user(&msg.author.id.to_string()).await {
-                Ok(user) => {
-                    let _ = msg
-                        .reply_mention(ctx, format!("Found id = {}", user.steam_id))
-                        .await;
-                }
-                Err(e) => {
-                    error!("{e:?}");
-                }
-            },
-            _ => {}
         }
     }
 
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         info!("{} is connected!", ready.user.name);
+
+        for register in [
+            commands::show::register,
+            commands::register::register,
+            commands::get_common_games::register,
+        ] {
+            if let Err(e) =
+                Command::create_global_application_command(&ctx, |command| register(command)).await
+            {
+                error!("{e:?}");
+            }
+        }
     }
 }
 
@@ -103,7 +84,7 @@ async fn serenity(
     };
 
     // Set gateway intents, which decides what events the bot will be notified about
-    let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT  ;
 
     let client = Client::builder(&token, intents)
         .event_handler(Bot {
