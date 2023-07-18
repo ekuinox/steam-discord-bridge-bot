@@ -17,7 +17,7 @@ pub async fn run(
         .create_interaction_response(ctx, |response| {
             response
                 .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|msg| msg.content(content))
+                .interaction_response_data(|msg| msg.ephemeral(true).content(content))
         })
         .await?;
 

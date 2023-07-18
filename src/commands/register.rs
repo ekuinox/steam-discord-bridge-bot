@@ -17,7 +17,7 @@ pub async fn run(
                 .create_interaction_response(ctx, |response| {
                     response
                         .kind(InteractionResponseType::ChannelMessageWithSource)
-                        .interaction_response_data(|msg| msg.content("Missing steam-id"))
+                        .interaction_response_data(|msg| msg.ephemeral(true).content("Missing steam-id"))
                 })
                 .await?;
             return Ok(());
@@ -28,7 +28,7 @@ pub async fn run(
             .create_interaction_response(ctx, |response| {
                 response
                     .kind(InteractionResponseType::ChannelMessageWithSource)
-                    .interaction_response_data(|msg| msg.content("Internal error"))
+                    .interaction_response_data(|msg| msg.ephemeral(true).content("Internal error"))
             })
             .await?;
         tracing::error!("Insert user error. {e:?}");
@@ -39,7 +39,7 @@ pub async fn run(
         .create_interaction_response(ctx, |response| {
             response
                 .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|msg| msg.content("OK"))
+                .interaction_response_data(|msg| msg.ephemeral(true).content("OK"))
         })
         .await?;
 
