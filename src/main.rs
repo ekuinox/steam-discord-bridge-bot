@@ -1,9 +1,9 @@
 mod db;
 mod steam;
 
-use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 use db::DbClient;
 use serenity::async_trait;
 use serenity::model::channel::Message;
@@ -11,7 +11,7 @@ use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 use shuttle_secrets::SecretStore;
 use sqlx::PgPool;
-use steam::{Game, SteamApiClient};
+use steam::SteamApiClient;
 use tracing::{error, info};
 
 #[derive(Debug)]
@@ -30,58 +30,11 @@ impl EventHandler for Bot {
 
         match splited[0] {
             "!match-by-steam-ids" if splited.len() > 2 => {
-                let ids = splited.iter().skip(1);
-                async fn get<'a>(
-                    steam: &'a SteamApiClient,
-                    id: &'a str,
-                ) -> Result<(&'a str, Vec<Game>)> {
-                    let resp = steam.get_owned_games(id).await?;
-                    Ok((id, resp))
+                let ids = splited.into_iter().skip(1).collect::<Vec<_>>();
+                let t = Instant::now();
+                if let Ok(common_games) = self.steam.get_common_games(&ids, ids.len()).await {
+                    dbg!(t.elapsed(), common_games.len());
                 }
-
-                let results = futures::future::join_all(ids.map(|id| get(&self.steam, id)))
-                    .await
-                    .into_iter()
-                    .flatten()
-                    .collect::<HashMap<_, _>>();
-
-                // これはできるけど、プロフィールがPrivateだと見られない
-                let games = results
-                    .iter()
-                    .flat_map(|(_, games)| games)
-                    .collect::<HashSet<_>>();
-                let games = games
-                    .iter()
-                    .filter(|game| results.values().all(|games| games.contains(&game)))
-                    .collect::<Vec<_>>();
-                dbg!(&games, results.len());
-
-                // これをやると死ぬ
-                // let games =
-                //     futures::future::join_all(games.iter().map(|game| get_detail(game.appid)))
-                //         .await
-                //         .into_iter()
-                //         .flatten()
-                //         .flat_map(|app| {
-                //             if let StoreAppDetail::Game(game) = app {
-                //                 Some(game)
-                //             } else {
-                //                 None
-                //             }
-                //         })
-                //         .collect::<Vec<_>>();
-
-                // なのでこれができない
-                // let names = games
-                //     .iter()
-                //     .map(|game| game.name.as_str())
-                //     .collect::<Vec<_>>()
-                //     .join(",");
-                // dbg!(&games);
-                // dbg!(&names);
-                // if let Err(e) = msg.reply_mention(ctx, format!("User = {}, Found = {names}", results.len())).await {
-                //     error!("{e:?}");
-                // }
             }
             "!profile" if splited.len() == 2 => {
                 let steam_id = splited[1];
