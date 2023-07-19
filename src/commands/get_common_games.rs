@@ -4,7 +4,10 @@ use futures::future::join_all;
 use serenity::client::Cache;
 
 use super::prelude::*;
-use crate::{db::DbClient, steam::SteamApiClient};
+use crate::{
+    db::DbClient,
+    steam::{Game, SteamApiClient},
+};
 
 pub const COMMAND: &str = "get-common-games";
 
@@ -70,8 +73,16 @@ pub async fn run(
         .iter()
         .map(|u| u.steam_id.as_str())
         .collect::<Vec<_>>();
-    // すべてのユーザーで共通しているゲームを名前付きで取得する
-    let games = steam.get_common_games(&ids, ids.len()).await?;
+
+    let games = join_all(ids.iter().map(|id| steam.get_owned_games(&id)))
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+    if games.len() < ids.len() {
+        tracing::warn!("1つ以上のユーザーの所有ゲームを取得できませんでした");
+    }
+    let games = get_common_games(games).unwrap_or_default();
 
     // TODO: 状態として、リクエストの ID をキーとして `games` と表示したページの番号を保存する
     // 保存する場所は DB に置けたらいいけど、オンメモリにするにしても一定期間で expire するようにしないとパンパンになってしまう
@@ -86,8 +97,7 @@ pub async fn run(
                 .interaction_response_data(|msg| {
                     let texts = games
                         .iter()
-                        .filter(|(_, users)| users.len() == ids.len())
-                        .map(|(game, _)| {
+                        .map(|game| {
                             format!(
                                 "- [{}](https://store.steampowered.com/app/{})\n",
                                 game.name, game.appid
@@ -104,6 +114,8 @@ pub async fn run(
                             }
                             texts
                         });
+
+                    msg.ephemeral(true);
                     for text in texts.iter().take(1) {
                         msg.embed(|embed| embed.title("Games").field("ALL", text, false));
                     }
@@ -124,4 +136,12 @@ pub async fn run(
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command.name(COMMAND).description("Register your steam id")
+}
+
+fn get_common_games(games: Vec<HashSet<Game>>) -> Option<HashSet<Game>> {
+    games.into_iter().reduce(|acc, x| {
+        acc.intersection(&x)
+            .map(ToOwned::to_owned)
+            .collect::<HashSet<_>>()
+    })
 }

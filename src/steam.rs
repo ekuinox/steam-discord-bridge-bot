@@ -1,7 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use anyhow::{Context, Result};
-use futures::future::join_all;
 use serde::Deserialize;
 
 /// [GetOwnedGames](https://developer.valvesoftware.com/wiki/Steam_Web_API#GetOwnedGames_.28v0001.29) response.
@@ -70,51 +69,5 @@ impl SteamApiClient {
             .await
             .context("invalid json")?;
         Ok(games)
-    }
-
-    /// Get owned games by steam id.
-    pub async fn get_owned_games_by_steam_ids<'a>(
-        &self,
-        steam_ids: &'a [&str],
-    ) -> Result<HashMap<&'a str, HashSet<Game>>> {
-        let r = join_all(steam_ids.iter().map(|id| async {
-            let resp = self.get_owned_games(id).await?;
-            Result::<(&str, HashSet<Game>)>::Ok((id, resp))
-        }))
-        .await
-        .into_iter()
-        .flatten()
-        .collect::<HashMap<_, _>>();
-        Ok(r)
-    }
-
-    /// 共通のゲームの所有者を取得する
-    ///
-    /// # Parameters
-    /// - `steam_ids` - 検索をかけるSteamのユーザID
-    /// - `min` - 最低数必要な所有者の数
-    pub async fn get_common_games<'a>(
-        &self,
-        steam_ids: &'a [&str],
-        min: usize,
-    ) -> Result<HashMap<Game, HashSet<&'a str>>> {
-        let all = self.get_owned_games_by_steam_ids(steam_ids).await?;
-        let games = all.values().flatten().collect::<HashSet<_>>();
-        let r = games
-            .into_iter()
-            .map(|game| {
-                (
-                    game,
-                    all.iter().fold(HashSet::new(), |mut owners, (id, games)| {
-                        if games.contains(&game) {
-                            owners.insert(*id);
-                        }
-                        owners
-                    }),
-                )
-            })
-            .filter_map(|(game, owners)| (owners.len() >= min).then(|| (game.clone(), owners)))
-            .collect::<HashMap<_, _>>();
-        Ok(r)
     }
 }
