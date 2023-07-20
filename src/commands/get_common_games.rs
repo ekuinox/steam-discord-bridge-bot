@@ -67,7 +67,7 @@ pub async fn run(
     // 引けなかったものは存在しないものとして除外する
     let users = ids
         .iter()
-        .flat_map(|id| User::load(&id, persist))
+        .flat_map(|id| User::load(id, persist))
         .collect::<HashSet<_>>();
 
     let ids = users.iter().map(|u| u.steam_id()).collect::<Vec<_>>();

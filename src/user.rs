@@ -15,7 +15,7 @@ impl User {
     }
 
     pub fn save(&self, discord_id: &str, persist: &PersistInstance) -> Result<()> {
-        persist.save(&Self::generate_persist_key(discord_id), &self)?;
+        persist.save(&Self::generate_persist_key(discord_id), self)?;
         Ok(())
     }
 
