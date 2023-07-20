@@ -20,9 +20,6 @@ struct Bot {
 
 #[async_trait]
 impl EventHandler for Bot {
-    async fn voice_state_update(&self, _ctx: Context, _old: Option<VoiceState>, _new: VoiceState) {
-        dbg!(&_new);
-    }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         match interaction {
             Interaction::ApplicationCommand(command) => {
