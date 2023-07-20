@@ -30,7 +30,7 @@ pub async fn run(
                 .kind(InteractionResponseType::ChannelMessageWithSource)
                 .interaction_response_data(|msg| {
                     msg.ephemeral(true)
-                        .content(format!("あなたのSteamIDは[{steam_id}](https://steamcommunity.com/profiles/{steam_id})として登録されてました。"))
+                        .content(format!("あなたのSteamIDは[{steam_id}](https://steamcommunity.com/profiles/{steam_id})として登録されました。"))
                 })
         })
         .await?;
