@@ -1,12 +1,14 @@
+use shuttle_persist::PersistInstance;
+
 use super::prelude::*;
-use crate::db::DbClient;
+use crate::user::User;
 
 pub const COMMAND: &str = "register";
 
 pub async fn run(
     ctx: impl AsRef<Http>,
     command: &ApplicationCommandInteraction,
-    db: &DbClient,
+    persist: &PersistInstance,
 ) -> Result<()> {
     let Some(steam_id) = command.data.options
         .iter()
@@ -23,7 +25,8 @@ pub async fn run(
             return Ok(());
         };
 
-    if let Err(e) = db.insert_user(&command.user.id.to_string(), steam_id).await {
+    let user = User::new(steam_id.to_string());
+    if let Err(e) = user.save(&command.user.id.to_string(), persist) {
         command
             .create_interaction_response(ctx, |response| {
                 response

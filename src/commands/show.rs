@@ -1,15 +1,17 @@
+use shuttle_persist::PersistInstance;
+
 use super::prelude::*;
-use crate::db::DbClient;
+use crate::user::User;
 
 pub const COMMAND: &str = "show";
 
 pub async fn run(
     ctx: impl AsRef<Http>,
     command: &ApplicationCommandInteraction,
-    db: &DbClient,
+    persist: &PersistInstance,
 ) -> Result<()> {
-    let content = match db.get_user(&command.user.id.to_string()).await {
-        Ok(user) => format!("Your steam id is {}", user.steam_id),
+    let content = match User::load(&command.user.id.to_string(), persist) {
+        Ok(user) => format!("Your steam id is {}", user.steam_id()),
         Err(_e) => "Your steam id is not registered".to_string(),
     };
 

@@ -1,18 +1,16 @@
 mod commands;
 mod common_games;
-mod db;
 mod steam;
+mod user;
 
 use std::str::FromStr;
 
 use anyhow::anyhow;
-use db::DbClient;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use serenity::{async_trait, model::prelude::command::Command};
 use shuttle_persist::PersistInstance;
 use shuttle_secrets::SecretStore;
-use sqlx::PgPool;
 use steam::SteamApiClient;
 use tracing::{error, info};
 
@@ -22,7 +20,6 @@ use crate::common_games::{
 
 struct Bot {
     steam: SteamApiClient,
-    db: DbClient,
     persist: PersistInstance,
 }
 
@@ -33,16 +30,15 @@ impl EventHandler for Bot {
             Interaction::ApplicationCommand(command) => {
                 let resp = match command.data.name.as_str() {
                     commands::register::COMMAND => {
-                        commands::register::run(ctx.clone(), &command, &self.db).await
+                        commands::register::run(ctx.clone(), &command, &self.persist).await
                     }
                     commands::show::COMMAND => {
-                        commands::show::run(ctx.clone(), &command, &self.db).await
+                        commands::show::run(ctx.clone(), &command, &self.persist).await
                     }
                     commands::get_common_games::COMMAND => {
                         commands::get_common_games::run(
                             ctx.clone(),
                             &command,
-                            &self.db,
                             &self.steam,
                             &self.persist,
                         )
@@ -107,10 +103,8 @@ impl EventHandler for Bot {
 #[shuttle_runtime::main]
 async fn serenity(
     #[shuttle_secrets::Secrets] secret_store: SecretStore,
-    #[shuttle_aws_rds::Postgres] pool: PgPool,
     #[shuttle_persist::Persist] persist: PersistInstance,
 ) -> shuttle_serenity::ShuttleSerenity {
-    let db = DbClient::new(pool).await.map_err(|e| anyhow!("{e:?}"))?;
     // Get the discord token set in `Secrets.toml`
     let token = if let Some(token) = secret_store.get("DISCORD_TOKEN") {
         token
@@ -130,7 +124,6 @@ async fn serenity(
     let client = Client::builder(&token, intents)
         .event_handler(Bot {
             steam: SteamApiClient::new(api_key),
-            db,
             persist,
         })
         .await

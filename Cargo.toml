@@ -18,14 +18,9 @@ serenity = { version = "0.11.5", default-features = false, features = [
     "model",
     "cache",
 ] }
-shuttle-aws-rds = { version = "0.21.0", features = ["postgres"] }
 shuttle-persist = "0.21.0"
 shuttle-runtime = "0.21.0"
 shuttle-secrets = "0.21.0"
 shuttle-serenity = "0.21.0"
-sqlx = { version = "0.6.2", features = [
-    "postgres",
-    "runtime-tokio-native-tls",
-] }
 tokio = "1.26.0"
 tracing = "0.1.37"

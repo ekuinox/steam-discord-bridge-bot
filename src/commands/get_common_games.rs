@@ -7,8 +7,8 @@ use shuttle_persist::PersistInstance;
 use super::prelude::*;
 use crate::{
     common_games::{create_interaction_response, CommonGamesButtonCustomId, CommonGamesStore},
-    db::DbClient,
     steam::SteamApiClient,
+    user::User,
 };
 
 pub const COMMAND: &str = "get-common-games";
@@ -16,7 +16,6 @@ pub const COMMAND: &str = "get-common-games";
 pub async fn run(
     ctx: impl AsRef<Cache> + AsRef<Http>,
     command: &ApplicationCommandInteraction,
-    db: &DbClient,
     steam: &SteamApiClient,
     persist: &PersistInstance,
 ) -> Result<()> {
@@ -66,16 +65,12 @@ pub async fn run(
 
     // Discord の ID から事前に登録された Steam の ID を引く
     // 引けなかったものは存在しないものとして除外する
-    let users = join_all(ids.iter().map(|id| db.get_user(id)))
-        .await
-        .into_iter()
-        .flatten()
+    let users = ids
+        .iter()
+        .flat_map(|id| User::load(&id, persist))
         .collect::<HashSet<_>>();
 
-    let ids = users
-        .iter()
-        .map(|u| u.steam_id.as_str())
-        .collect::<Vec<_>>();
+    let ids = users.iter().map(|u| u.steam_id()).collect::<Vec<_>>();
 
     let games = join_all(ids.iter().map(|id| steam.get_owned_games(id)))
         .await
