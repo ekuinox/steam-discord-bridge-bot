@@ -2,6 +2,17 @@
 
 Discordで通話に参加しているユーザーが共通で所有するSteamのゲームをリストアップするためのbot.
 
+## 必要なもの
+
+- [shuttle.rs](https://www.shuttle.rs) のアカウント
+- [`cargo-shuttle`](https://crates.io/crates/cargo-shuttle)
+- Steam Web API Key - https://steamcommunity.com/dev から取得できる
+- Discord Bot トークン - https://discord.com/developers/applications から取得できる
+
+ローカルでは `cargo shuttle run` で実行できる。
+
+デプロイするには `cargo shuttle deploy` を実行すると多分よい。
+
 ## Serenity Hello World Bot with Shuttle
 
 In this example we will deploy a Serenity bot with Shuttle that responds to the `!hello` command with `world!`. To run this bot we need a valid Discord Token. To get started log in to the [Discord developer portal](https://discord.com/developers/applications).
