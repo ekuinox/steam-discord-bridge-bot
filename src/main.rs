@@ -1,21 +1,29 @@
 mod commands;
+mod common_games;
 mod db;
 mod steam;
+
+use std::str::FromStr;
 
 use anyhow::anyhow;
 use db::DbClient;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use serenity::{async_trait, model::prelude::command::Command};
+use shuttle_persist::PersistInstance;
 use shuttle_secrets::SecretStore;
 use sqlx::PgPool;
 use steam::SteamApiClient;
 use tracing::{error, info};
 
-#[derive(Debug)]
+use crate::common_games::{
+    create_interaction_response, CommonGamesButtonCustomId, CommonGamesStore,
+};
+
 struct Bot {
     steam: SteamApiClient,
     db: DbClient,
+    persist: PersistInstance,
 }
 
 #[async_trait]
@@ -36,6 +44,7 @@ impl EventHandler for Bot {
                             &command,
                             &self.db,
                             &self.steam,
+                            &self.persist,
                         )
                         .await
                     }
@@ -48,12 +57,31 @@ impl EventHandler for Bot {
                     tracing::warn!("{e:?}");
                 }
             }
-            Interaction::MessageComponent(mut component) => {
-                dbg!(component.message.id, component.data.custom_id);
-                let _r = component
-                    .message
-                    .edit(ctx, |msg| msg.content("aaaaaa"))
-                    .await;
+            Interaction::MessageComponent(component) => {
+                if let Ok(custom_id) =
+                    CommonGamesButtonCustomId::from_str(&component.data.custom_id)
+                {
+                    if let Ok(store) = CommonGamesStore::load(&custom_id.key, &self.persist) {
+                        let games = store.get(custom_id.page);
+                        if let Err(e) = component
+                            .create_interaction_response(&ctx, |response| {
+                                response.interaction_response_data(|msg| {
+                                    create_interaction_response(custom_id, games, true, msg);
+                                    msg
+                                })
+                            })
+                            .await
+                        {
+                            tracing::error!("{e:?}")
+                        }
+                        if let Err(e) = component
+                            .delete_followup_message(&ctx, component.message.id)
+                            .await
+                        {
+                            tracing::error!("{e:?}")
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -80,6 +108,7 @@ impl EventHandler for Bot {
 async fn serenity(
     #[shuttle_secrets::Secrets] secret_store: SecretStore,
     #[shuttle_aws_rds::Postgres] pool: PgPool,
+    #[shuttle_persist::Persist] persist: PersistInstance,
 ) -> shuttle_serenity::ShuttleSerenity {
     let db = DbClient::new(pool).await.map_err(|e| anyhow!("{e:?}"))?;
     // Get the discord token set in `Secrets.toml`
@@ -102,6 +131,7 @@ async fn serenity(
         .event_handler(Bot {
             steam: SteamApiClient::new(api_key),
             db,
+            persist,
         })
         .await
         .expect("Err creating client");

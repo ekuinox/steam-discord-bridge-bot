@@ -1,13 +1,13 @@
 use std::collections::HashSet;
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 
 /// [GetOwnedGames](https://developer.valvesoftware.com/wiki/Steam_Web_API#GetOwnedGames_.28v0001.29) response.
 ///
 /// - クエリに `include_appinfo=true`. を含む必要がある
 /// - ほかのフィールドを有効にするとユーザーごとに異なってきてしまうため除外している
-#[derive(Deserialize, PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Debug)]
 pub struct Game {
     pub appid: u64,
     pub name: String,

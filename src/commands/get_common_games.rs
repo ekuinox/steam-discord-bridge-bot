@@ -2,11 +2,13 @@ use std::collections::HashSet;
 
 use futures::future::join_all;
 use serenity::client::Cache;
+use shuttle_persist::PersistInstance;
 
 use super::prelude::*;
 use crate::{
+    common_games::{create_interaction_response, CommonGamesButtonCustomId, CommonGamesStore},
     db::DbClient,
-    steam::{Game, SteamApiClient},
+    steam::SteamApiClient,
 };
 
 pub const COMMAND: &str = "get-common-games";
@@ -16,6 +18,7 @@ pub async fn run(
     command: &ApplicationCommandInteraction,
     db: &DbClient,
     steam: &SteamApiClient,
+    persist: &PersistInstance,
 ) -> Result<()> {
     let Some(guild_id) = command.guild_id else {
         command
@@ -63,7 +66,7 @@ pub async fn run(
 
     // Discord の ID から事前に登録された Steam の ID を引く
     // 引けなかったものは存在しないものとして除外する
-    let users = join_all(ids.iter().map(|id| db.get_user(&id)))
+    let users = join_all(ids.iter().map(|id| db.get_user(id)))
         .await
         .into_iter()
         .flatten()
@@ -74,7 +77,7 @@ pub async fn run(
         .map(|u| u.steam_id.as_str())
         .collect::<Vec<_>>();
 
-    let games = join_all(ids.iter().map(|id| steam.get_owned_games(&id)))
+    let games = join_all(ids.iter().map(|id| steam.get_owned_games(id)))
         .await
         .into_iter()
         .flatten()
@@ -82,50 +85,20 @@ pub async fn run(
     if games.len() < ids.len() {
         tracing::warn!("1つ以上のユーザーの所有ゲームを取得できませんでした");
     }
-    let games = get_common_games(games).unwrap_or_default();
 
-    // TODO: 状態として、リクエストの ID をキーとして `games` と表示したページの番号を保存する
-    // 保存する場所は DB に置けたらいいけど、オンメモリにするにしても一定期間で expire するようにしないとパンパンになってしまう
-    // ringbuffer とかどう
-    // 先頭の数件だけを embed として表示して返す
+    let games = CommonGamesStore::new(games);
+    let key = command.user.id.to_string();
+    games.save(&key, persist)?;
 
-    // なんかうまいこと 2000 文字以内にして返したい
+    let games = games.get(0);
+    let custom_id = CommonGamesButtonCustomId::new(0, key);
+
     command
         .create_interaction_response(ctx, |response| {
             response
                 .kind(InteractionResponseType::ChannelMessageWithSource)
                 .interaction_response_data(|msg| {
-                    let texts = games
-                        .iter()
-                        .map(|game| {
-                            format!(
-                                "- [{}](https://store.steampowered.com/app/{})\n",
-                                game.name, game.appid
-                            )
-                        })
-                        .fold(Vec::<String>::new(), |mut texts, line| {
-                            match texts.last_mut() {
-                                Some(last) if last.len() + line.len() < 1024 => {
-                                    last.push_str(&line);
-                                }
-                                _ => {
-                                    texts.push(line);
-                                }
-                            }
-                            texts
-                        });
-
-                    msg.ephemeral(true);
-                    for text in texts.iter().take(1) {
-                        msg.embed(|embed| embed.title("Games").field("ALL", text, false));
-                    }
-                    msg.components(|c| {
-                        c.create_action_row(|r| {
-                            // この next-button を next-button-[a-z]{10} にして紐づけるしかない?
-                            r.create_button(|b| b.custom_id("next-button").label("NEXT"))
-                        })
-                    });
-                    msg.custom_id("hogeeee");
+                    create_interaction_response(custom_id, games, true, msg);
                     msg
                 })
         })
@@ -136,12 +109,4 @@ pub async fn run(
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command.name(COMMAND).description("Register your steam id")
-}
-
-fn get_common_games(games: Vec<HashSet<Game>>) -> Option<HashSet<Game>> {
-    games.into_iter().reduce(|acc, x| {
-        acc.intersection(&x)
-            .map(ToOwned::to_owned)
-            .collect::<HashSet<_>>()
-    })
 }
