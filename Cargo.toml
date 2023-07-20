@@ -1,5 +1,5 @@
 [package]
-name = "steam-library-discord-bot"
+name = "steam-discord-bridge-bot"
 version = "0.1.0"
 edition = "2021"
 
