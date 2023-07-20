@@ -1,3 +1,4 @@
+use anyhow::bail;
 use shuttle_persist::PersistInstance;
 
 use super::prelude::*;
@@ -15,34 +16,22 @@ pub async fn run(
         .find(|opt| opt.name == "steam-id")
         .and_then(|opt| opt.value.as_ref())
         .and_then(|v| v.as_str()) else {
-            command
-                .create_interaction_response(ctx, |response| {
-                    response
-                        .kind(InteractionResponseType::ChannelMessageWithSource)
-                        .interaction_response_data(|msg| msg.ephemeral(true).content("Missing steam-id"))
-                })
-                .await?;
-            return Ok(());
+            bail!("steam id is missing.");
         };
 
     let user = User::new(steam_id.to_string());
     if let Err(e) = user.save(&command.user.id.to_string(), persist) {
-        command
-            .create_interaction_response(ctx, |response| {
-                response
-                    .kind(InteractionResponseType::ChannelMessageWithSource)
-                    .interaction_response_data(|msg| msg.ephemeral(true).content("Internal error"))
-            })
-            .await?;
-        tracing::error!("Insert user error. {e:?}");
-        return Ok(());
+        bail!("Insert user error. {e:?}");
     }
 
     command
         .create_interaction_response(ctx, |response| {
             response
                 .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|msg| msg.ephemeral(true).content("OK"))
+                .interaction_response_data(|msg| {
+                    msg.ephemeral(true)
+                        .content(format!("あなたのSteamIDは[{steam_id}](https://steamcommunity.com/profiles/{steam_id})として登録されてました。"))
+                })
         })
         .await?;
 
@@ -52,11 +41,13 @@ pub async fn run(
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command
         .name(COMMAND)
-        .description("Register your steam id")
+        .description("あなたのSteamIDを登録してください。")
         .create_option(|option| {
             option
                 .name("steam-id")
-                .description("Steam ID for register")
+                .description(
+                    "アカウント詳細ページからSteamIDを取得してください。 https://store.steampowered.com/account/",
+                )
                 .kind(CommandOptionType::String)
                 .required(true)
         })

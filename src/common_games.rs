@@ -115,7 +115,7 @@ pub fn create_interaction_response(
         })
         .collect::<String>();
     msg.ephemeral(ephemeral)
-        .embed(|embed| embed.field(format!("Games {}", custom_id.page), text, false))
+        .embed(|embed| embed.field(format!("Games: p{}", custom_id.page), text, false))
         .components(|c| {
             c.create_action_row(|r| {
                 r.create_button(|b| {

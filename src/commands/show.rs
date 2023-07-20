@@ -11,8 +11,12 @@ pub async fn run(
     persist: &PersistInstance,
 ) -> Result<()> {
     let content = match User::load(&command.user.id.to_string(), persist) {
-        Ok(user) => format!("Your steam id is {}", user.steam_id()),
-        Err(_e) => "Your steam id is not registered".to_string(),
+        Ok(user) => format!(
+            "あなたのSteamIDは[{}](https://steamcommunity.com/profiles/{})として登録されています。",
+            user.steam_id(),
+            user.steam_id(),
+        ),
+        Err(_e) => "あなたのSteamIDは未登録のようです。".to_string(),
     };
 
     command
@@ -27,5 +31,7 @@ pub async fn run(
 }
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
-    command.name(COMMAND).description("Register your steam id")
+    command
+        .name(COMMAND)
+        .description("あなたが現在登録しているSteamのIDを返します。")
 }

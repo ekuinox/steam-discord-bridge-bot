@@ -22,9 +22,9 @@ pub async fn run(
     let Some(guild_id) = command.guild_id else {
         command
             .create_interaction_response(&ctx, |resp| {
-                resp.kind(InteractionResponseType::UpdateMessage)
+                resp.kind(InteractionResponseType::ChannelMessageWithSource)
                     .interaction_response_data(|int| {
-                        int.ephemeral(true).content("Please call at guild channel.")
+                        int.ephemeral(true).content("サーバーの内のチャンネルで呼び出してください。")
                     })
             })
             .await?;
@@ -34,9 +34,9 @@ pub async fn run(
     let Some(guild) = guild_id.to_guild_cached(&ctx) else {
         command
             .create_interaction_response(&ctx, |resp| {
-                resp.kind(InteractionResponseType::UpdateMessage)
+                resp.kind(InteractionResponseType::ChannelMessageWithSource)
                     .interaction_response_data(|int| {
-                        int.ephemeral(true).content("Internal error.")
+                        int.ephemeral(true).content("内部でなにかおかしなことになりました。")
                     })
             })
             .await?;
@@ -46,9 +46,9 @@ pub async fn run(
     let Some(channel_id) = guild.voice_states.get(&command.user.id).and_then(|s| s.channel_id) else {
         command
             .create_interaction_response(&ctx, |resp| {
-                resp.kind(InteractionResponseType::UpdateMessage)
+                resp.kind(InteractionResponseType::ChannelMessageWithSource)
                     .interaction_response_data(|int| {
-                        int.ephemeral(true).content("Please call when you joined voice channel.")
+                        int.ephemeral(true).content("通話チャンネルにいる状態で呼び出してください。")
                     })
             })
             .await?;
@@ -77,6 +77,7 @@ pub async fn run(
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
+    let read_users_count = games.len();
     if games.len() < ids.len() {
         tracing::warn!("1つ以上のユーザーの所有ゲームを取得できませんでした");
     }
@@ -94,7 +95,7 @@ pub async fn run(
                 .kind(InteractionResponseType::ChannelMessageWithSource)
                 .interaction_response_data(|msg| {
                     create_interaction_response(custom_id, games, true, msg);
-                    msg
+                    msg.content(format!("通話中のチャンネルにいるメンバーのうち{read_users_count}人のsteamライブラリを読むことができました"))
                 })
         })
         .await?;
@@ -103,5 +104,5 @@ pub async fn run(
 }
 
 pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
-    command.name(COMMAND).description("Register your steam id")
+    command.name(COMMAND).description("あなたがいま参加している通話チャンネルの参加者がすべてが所持しているSteamのゲームを表示します。")
 }
