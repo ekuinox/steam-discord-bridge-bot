@@ -30,7 +30,8 @@ impl CommonGamesStore {
                     .collect::<HashSet<_>>()
             })
             .unwrap_or_default();
-        let game_ids = games.iter().map(|game| game.appid).collect();
+        let mut game_ids = games.iter().map(|game| game.appid).collect::<Vec<_>>();
+        game_ids.sort_by(|a, b| a.cmp(&b));
         let games = games.into_iter().map(|game| (game.appid, game)).collect();
         CommonGamesStore { games, game_ids }
     }
@@ -41,11 +42,14 @@ impl CommonGamesStore {
             .chunks(PAGE_SIZE)
             .nth(page_idx)
             .unwrap_or_default();
-        self.games
+        let mut games = self
+            .games
             .iter()
             .filter(|(id, _)| ids.contains(id))
             .map(|(_, game)| game)
-            .collect()
+            .collect::<Vec<_>>();
+        games.sort_by(|a, b| a.appid.cmp(&b.appid));
+        games
     }
 
     pub fn load(key: &str, persist: &PersistInstance) -> Result<CommonGamesStore> {
