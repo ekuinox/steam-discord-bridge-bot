@@ -44,6 +44,7 @@ impl EventHandler for Bot {
                         )
                         .await
                     }
+                    commands::help::COMMAND => commands::help::run(ctx.clone(), &command).await,
                     c => {
                         tracing::warn!("Not implimented {c}");
                         return;
@@ -90,6 +91,7 @@ impl EventHandler for Bot {
             commands::show::register,
             commands::register::register,
             commands::get_common_games::register,
+            commands::help::register,
         ] {
             if let Err(e) =
                 Command::create_global_application_command(&ctx, |command| register(command)).await

@@ -1,4 +1,5 @@
 pub mod get_common_games;
+pub mod help;
 pub mod register;
 pub mod show;
 
