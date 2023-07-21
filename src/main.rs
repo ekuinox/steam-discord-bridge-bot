@@ -6,6 +6,7 @@ mod user;
 use std::str::FromStr;
 
 use anyhow::anyhow;
+use futures::future::join_all;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use serenity::{async_trait, model::prelude::command::Command};
@@ -86,6 +87,22 @@ impl EventHandler for Bot {
 
     async fn ready(&self, ctx: Context, ready: Ready) {
         info!("{} is connected!", ready.user.name);
+
+        // 登録する前に先に古いコマンドを一通り削除する
+        if let Ok(commands) = Command::get_global_application_commands(&ctx).await {
+            if let Some(err) = join_all(
+                commands
+                    .into_iter()
+                    .map(|command| Command::delete_global_application_command(&ctx, command.id)),
+            )
+            .await
+            .into_iter()
+            .find_map(|r| r.err())
+            {
+                tracing::error!("{err:?}");
+            }
+            tracing::info!("Remove older commands");
+        }
 
         for register in [
             commands::show::register,
