@@ -31,7 +31,7 @@ impl CommonGamesStore {
             })
             .unwrap_or_default();
         let mut game_ids = games.iter().map(|game| game.appid).collect::<Vec<_>>();
-        game_ids.sort_by(|a, b| a.cmp(&b));
+        game_ids.sort();
         let games = games.into_iter().map(|game| (game.appid, game)).collect();
         CommonGamesStore { games, game_ids }
     }
